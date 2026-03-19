@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nima — Municipal Budget Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ── Design system ─────────────────────────────────────────────────────── */
+    :root {
+      --ink:        #0d0f14;
+      --ink-mid:    #3a3d48;
+      --ink-faint:  #8a8e9a;
+      --paper:      #f7f5f0;
+      --paper-warm: #efecea;
+      --rule:       #d8d4cc;
+      --accent:     #c0392b;       /* civic red — authority, urgency */
+      --accent-soft:#f5ede0;
+      --green:      #1a6b4a;
+      --green-soft: #e2f0ea;
+      --blue:       #1a3a6b;
+      --blue-soft:  #e5edf7;
+
+      /* Chart palette — muted, editorial */
+      --c1:#c0392b; --c2:#1a3a6b; --c3:#1a6b4a;
+      --c4:#7d5a2e; --c5:#4a2d6b; --c6:#2d6b68;
+      --c7:#6b2d47; --c8:#3d6b2d; --c9:#6b5c2d; --c10:#2d456b;
+
+      --font-display: 'DM Serif Display', Georgia, serif;
+      --font-body:    'DM Sans', sans-serif;
+      --font-mono:    'DM Mono', 'Courier New', monospace;
+
+      --radius: 3px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.05);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Masthead ──────────────────────────────────────────────────────────── */
+    .masthead {
+      background: var(--ink);
+      color: var(--paper);
+      padding: 0 2.5rem;
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      border-bottom: 3px solid var(--accent);
+    }
+    .masthead-brand {
+      padding: 1.25rem 2rem 1.25rem 0;
+      border-right: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .masthead-title {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: #fff;
+    }
+    .masthead-title em {
+      color: var(--accent);
+      font-style: italic;
+    }
+    .masthead-sub {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+      font-weight: 300;
+    }
+    .masthead-meta {
+      padding: 1.25rem 0 1.25rem 2rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.2rem;
+    }
+    .masthead-meta p {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 0.04em;
+    }
+    .masthead-meta strong {
+      color: rgba(255,255,255,0.75);
+      font-weight: 500;
+    }
+
+    /* ── Controls bar ──────────────────────────────────────────────────────── */
+    .controls {
+      background: var(--paper-warm);
+      border-bottom: 1px solid var(--rule);
+      padding: 0.9rem 2.5rem;
+      display: flex;
+      align-items: flex-end;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .control-group label {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      font-weight: 500;
+    }
+    select, input[type="number"], input[type="text"] {
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      background: #fff;
+      border: 1px solid var(--rule);
+      color: var(--ink);
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--radius);
+      min-width: 160px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus, input:focus {
+      border-color: var(--ink-mid);
+    }
+    .btn-load {
+      font-family: var(--font-body);
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0.48rem 1.4rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-load:hover  { background: #a93226; }
+    .btn-load:active { transform: translateY(1px); }
+    .btn-load:disabled { background: var(--rule); color: var(--ink-faint); cursor: not-allowed; }
+
+    /* ── Stats strip ───────────────────────────────────────────────────────── */
+    .stats-strip {
+      display: none;
+      background: var(--ink);
+      color: #fff;
+      padding: 0 2.5rem;
+      gap: 0;
+    }
+    .stat-cell {
+      padding: 0.9rem 2rem 0.9rem 0;
+      margin-right: 2rem;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .stat-cell:last-child { border-right: none; }
+    .stat-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 0.1rem;
+    }
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      line-height: 1;
+      color: #fff;
+    }
+    .stat-value.accent { color: var(--accent); }
+
+    /* ── Main layout ───────────────────────────────────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 0;
+      padding: 2rem 2.5rem;
+      gap: 1.5rem;
+    }
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    /* ── Cards ─────────────────────────────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card.full { grid-column: 1 / -1; }
+    .card-head {
+      padding: 1rem 1.25rem 0.75rem;
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+    }
+    .card-head h2 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+    .card-head .card-sub {
+      font-size: 0.7rem;
+      color: var(--ink-faint);
+      letter-spacing: 0.04em;
+    }
+    .card-body { padding: 1.25rem; }
+
+    /* ── Charts ─────────────────────────────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 280px; }
+
+    /* ── Table ──────────────────────────────────────────────────────────────── */
+    .search-row {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--rule);
+      background: var(--paper-warm);
+    }
+    .search-row input { flex: 1; min-width: 0; }
+    .btn-ghost {
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      font-weight: 500;
+      background: #fff;
+      border: 1px solid var(--rule);
+      color: var(--ink-mid);
+      padding: 0.4rem 0.9rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .btn-ghost:hover { border-color: var(--ink-mid); }
+
+    .table-scroll { max-height: 360px; overflow-y: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    thead th {
+      position: sticky; top: 0; z-index: 1;
+      background: var(--paper-warm);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      font-weight: 500;
+      padding: 0.55rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--rule);
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.55rem 1rem;
+      border-bottom: 1px solid var(--paper-warm);
+      color: var(--ink);
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--paper-warm); }
+    .td-code {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--ink-faint);
+    }
+    .td-amount {
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--green);
+      font-weight: 500;
+    }
+    .td-page {
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--ink-faint);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+      padding: 0.15rem 0.5rem;
+      border-radius: 2px;
+    }
+    .badge-technical { background: var(--blue-soft);  color: var(--blue); }
+    .badge-revenue   { background: var(--green-soft); color: var(--green); }
+    .badge-expense   { background: var(--accent-soft);color: var(--accent); }
+    .badge-unknown   { background: var(--paper-warm); color: var(--ink-faint); }
+
+    .conf-bar {
+      display: inline-block;
+      width: 36px; height: 4px;
+      background: var(--rule);
+      border-radius: 2px;
+      vertical-align: middle;
+      position: relative;
+    }
+    .conf-bar::after {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; height: 100%;
+      border-radius: 2px;
+      background: var(--green);
+    }
+
+    /* ── Pagination ─────────────────────────────────────────────────────────── */
+    .pagination {
+      display: none;
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--rule);
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--paper-warm);
+    }
+    .page-info {
+      font-size: 0.75rem;
+      color: var(--ink-faint);
+      font-family: var(--font-mono);
+    }
+
+    /* ── Empty / error states ───────────────────────────────────────────────── */
+    .state-msg {
+      padding: 3rem 1.25rem;
+      text-align: center;
+      color: var(--ink-faint);
+      font-size: 0.85rem;
+      line-height: 1.8;
+    }
+    .state-msg.error { color: var(--accent); }
+    .state-msg code {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: var(--paper-warm);
+      padding: 0.1rem 0.4rem;
+      border-radius: 2px;
+    }
+
+    /* ── Confidence legend ──────────────────────────────────────────────────── */
+    .conf-legend {
+      display: flex;
+      gap: 1rem;
+      padding: 0.5rem 1.25rem;
+      border-top: 1px solid var(--rule);
+      background: var(--paper-warm);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .conf-legend span { display: flex; align-items: center; gap: 0.3rem; }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* ── Animations ─────────────────────────────────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card { animation: fadeUp 0.35s ease both; }
+    .card:nth-child(2) { animation-delay: 0.05s; }
+    .card:nth-child(3) { animation-delay: 0.10s; }
+  </style>
+</head>
+<body>
+
+<!-- ── Masthead ──────────────────────────────────────────────────────────── -->
+<header class="masthead">
+  <div class="masthead-brand">
+    <div class="masthead-title">N<em>i</em>ma</div>
+    <div class="masthead-sub">Municipal Transparency Platform</div>
+  </div>
+  <div class="masthead-meta">
+    <p>Public budget data · <strong>Greek municipalities</strong></p>
+    <p>Unthreading civic documents for citizen clarity</p>
+  </div>
+</header>
+
+<!-- ── Controls ──────────────────────────────────────────────────────────── -->
+<div class="controls">
+  <div class="control-group">
+    <label>Municipality</label>
+    <select id="sel-municipality">
+      <option value="">— select —</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Fiscal Year</label>
+    <input type="number" id="sel-year" value="2024" min="2000" max="2030" style="min-width:100px" />
+  </div>
+  <div class="control-group">
+    <label>Document Type</label>
+    <select id="sel-type">
+      <option value="budget">Budget (Προϋπολογισμός)</option>
+      <option value="technical_programme">Technical Programme</option>
+    </select>
+  </div>
+  <button class="btn-load" id="btn-load" onclick="loadData()">Load Data</button>
+</div>
+
+<!-- ── Stats strip ───────────────────────────────────────────────────────── -->
+<div class="stats-strip" id="stats-strip">
+  <div class="stat-cell">
+    <div class="stat-label">Total Budget</div>
+    <div class="stat-value accent" id="st-total">—</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-label">Line Items</div>
+    <div class="stat-value" id="st-items">—</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-label">Categories</div>
+    <div class="stat-value" id="st-cats">—</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-label">Fiscal Year</div>
+    <div class="stat-value" id="st-year">—</div>
+  </div>
+</div>
+
+<!-- ── Main layout ───────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- Bar chart -->
+  <div class="card">
+    <div class="card-head">
+      <h2>Spending by Category</h2>
+      <span class="card-sub">EUR · sorted by value</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap"><canvas id="chart-bar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Doughnut chart -->
+  <div class="card">
+    <div class="card-head">
+      <h2>Category Distribution</h2>
+      <span class="card-sub">share of total</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap"><canvas id="chart-pie"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Items table -->
+  <div class="card full">
+    <div class="card-head">
+      <h2>Budget Items</h2>
+      <span class="card-sub" id="items-count"></span>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="search-input" placeholder="Search projects, descriptions, codes…" />
+      <button class="btn-ghost" onclick="searchItems()">Search</button>
+      <button class="btn-ghost" onclick="clearSearch()">Clear</button>
+    </div>
+
+    <div class="table-scroll" id="items-wrap">
+      <div class="state-msg">Select a municipality and click <strong>Load Data</strong> to begin.</div>
+    </div>
+
+    <div class="conf-legend" id="conf-legend" style="display:none">
+      <span>Extraction confidence:</span>
+      <span><span class="dot" style="background:var(--green)"></span> High (&gt;0.8)</span>
+      <span><span class="dot" style="background:#f39c12"></span> Medium (0.5–0.8)</span>
+      <span><span class="dot" style="background:var(--accent)"></span> Low (&lt;0.5)</span>
+    </div>
+
+    <div class="pagination" id="pagination">
+      <button class="btn-ghost" id="btn-prev" onclick="changePage(-1)">← Previous</button>
+      <span class="page-info" id="page-info"></span>
+      <button class="btn-ghost" id="btn-next" onclick="changePage(1)">Next →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Configuration ────────────────────────────────────────────────────────
+  const API       = 'http://localhost:8000';
+  const PAGE_SIZE = 50;
+  const COLORS    = [
+    '#c0392b','#1a3a6b','#1a6b4a','#7d5a2e','#4a2d6b',
+    '#2d6b68','#6b2d47','#3d6b2d','#6b5c2d','#2d456b'
+  ];
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let barChart = null, pieChart = null;
+  let currentMuniId = null, currentYear = null, currentType = null;
+  let currentPage = 0, lastSearch = '';
+
+  // ── Initialisation ───────────────────────────────────────────────────────
+  async function init() {
+    try {
+      const munis = await apiFetch('/municipalities');
+      const sel   = document.getElementById('sel-municipality');
+      munis.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value       = m.id;
+        opt.textContent = m.name;
+        sel.appendChild(opt);
+      });
+      // Auto-load if only one municipality is available
+      if (munis.length === 1) {
+        sel.value = munis[0].id;
+        loadData();
+      }
+    } catch (e) {
+      document.getElementById('items-wrap').innerHTML = `
+        <div class="state-msg error">
+          ⚠ Cannot connect to API at <code>${API}</code><br>
+          Make sure <code>nima serve</code> is running in another terminal.
+        </div>`;
+    }
+  }
+
+  // ── API helper ───────────────────────────────────────────────────────────
+  async function apiFetch(path) {
+    const res = await fetch(API + path);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+    return res.json();
+  }
+
+  // ── Load ─────────────────────────────────────────────────────────────────
+  async function loadData() {
+    const muniId = document.getElementById('sel-municipality').value;
+    const year   = document.getElementById('sel-year').value;
+    const type   = document.getElementById('sel-type').value;
+    if (!muniId) { alert('Please select a municipality.'); return; }
+
+    currentMuniId = muniId;
+    currentYear   = year;
+    currentType   = type;
+    currentPage   = 0;
+    lastSearch    = '';
+    document.getElementById('search-input').value = '';
+    document.getElementById('btn-load').disabled = true;
+
+    try {
+      await Promise.all([
+        loadSummary(muniId, year, type),
+        loadItems(muniId, year, type, 0, ''),
+      ]);
+    } catch(e) {
+      document.getElementById('items-wrap').innerHTML =
+        `<div class="state-msg error">⚠ ${e.message}</div>`;
+    } finally {
+      document.getElementById('btn-load').disabled = false;
+    }
+  }
+
+  // ── Summary + charts ─────────────────────────────────────────────────────
+  async function loadSummary(muniId, year, type) {
+    const data = await apiFetch(
+      `/municipalities/${muniId}/summary?year=${year}&doc_type=${type}`
+    );
+
+    // Stats strip
+    const strip = document.getElementById('stats-strip');
+    strip.style.display = 'flex';
+    document.getElementById('st-total').textContent = fmtEur(data.total_amount);
+    document.getElementById('st-items').textContent = data.item_count.toLocaleString();
+    document.getElementById('st-cats').textContent  = data.categories.length;
+    document.getElementById('st-year').textContent  = data.fiscal_year;
+
+    renderCharts(data.categories);
+  }
+
+  // ── Charts ───────────────────────────────────────────────────────────────
+  function renderCharts(categories) {
+    const labels  = categories.map(c => truncate(c.category, 30));
+    const amounts = categories.map(c => c.total_amount);
+
+    // Bar chart
+    if (barChart) barChart.destroy();
+    barChart = new Chart(document.getElementById('chart-bar'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data: amounts,
+          backgroundColor: COLORS,
+          borderRadius: 2,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0d0f14',
+            titleFont: { family: 'DM Serif Display', size: 13 },
+            bodyFont:  { family: 'DM Mono', size: 11 },
+            padding: 10,
+            callbacks: { label: ctx => '  ' + fmtEur(ctx.parsed.y) }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#8a8e9a',
+              font: { family: 'DM Sans', size: 10 },
+              maxRotation: 30,
+            },
+            grid: { color: '#efecea' }
+          },
+          y: {
+            ticks: {
+              color: '#8a8e9a',
+              font: { family: 'DM Mono', size: 10 },
+              callback: v => fmtShort(v)
+            },
+            grid: { color: '#efecea' }
+          }
+        }
+      }
+    });
+
+    // Doughnut chart
+    if (pieChart) pieChart.destroy();
+    pieChart = new Chart(document.getElementById('chart-pie'), {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data: amounts,
+          backgroundColor: COLORS,
+          hoverOffset: 8,
+          borderWidth: 2,
+          borderColor: '#fff',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '62%',
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              color: '#3a3d48',
+              font: { family: 'DM Sans', size: 10 },
+              boxWidth: 10,
+              padding: 10,
+            }
+          },
+          tooltip: {
+            backgroundColor: '#0d0f14',
+            bodyFont: { family: 'DM Mono', size: 11 },
+            padding: 10,
+            callbacks: { label: ctx => '  ' + fmtEur(ctx.parsed) }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Items table ──────────────────────────────────────────────────────────
+  async function loadItems(muniId, year, type, page, search) {
+    const skip = page * PAGE_SIZE;
+    let url = `/municipalities/${muniId}/items?year=${year}&doc_type=${type}&skip=${skip}&limit=${PAGE_SIZE}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+
+    const items = await apiFetch(url);
+    renderTable(items);
+    updatePagination(items.length);
+
+    const countEl = document.getElementById('items-count');
+    countEl.textContent = search
+      ? `${items.length} result(s) for "${search}"`
+      : `page ${page + 1}`;
+  }
+
+  function renderTable(items) {
+    const wrap = document.getElementById('items-wrap');
+    if (!items.length) {
+      wrap.innerHTML = '<div class="state-msg">No results found.</div>';
+      document.getElementById('conf-legend').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('conf-legend').style.display = 'flex';
+
+    wrap.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th>Type</th>
+            <th style="text-align:right">Amount (€)</th>
+            <th style="text-align:right">Conf.</th>
+            <th style="text-align:right">Page</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(i => {
+            const conf  = i.confidence_score ?? 0.5;
+            const cColor = conf >= 0.8 ? 'var(--green)' : conf >= 0.5 ? '#f39c12' : 'var(--accent)';
+            const badge  = `badge badge-${i.item_type}`;
+            return `<tr>
+              <td class="td-code">${esc(i.code || '—')}</td>
+              <td>${esc(i.description)}</td>
+              <td style="font-size:0.78rem;color:var(--ink-mid)">${esc(i.subcategory || i.category || '—')}</td>
+              <td><span class="${badge}">${i.item_type}</span></td>
+              <td class="td-amount">${i.amount != null ? fmtEur(i.amount) : '—'}</td>
+              <td class="td-page">
+                <span class="conf-bar" style="--conf:${conf}">
+                  <span style="position:absolute;left:0;top:0;height:100%;width:${(conf*100).toFixed(0)}%;background:${cColor};border-radius:2px"></span>
+                </span>
+              </td>
+              <td class="td-page">${i.source_page || '—'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // ── Search ───────────────────────────────────────────────────────────────
+  function searchItems() {
+    lastSearch  = document.getElementById('search-input').value.trim();
+    currentPage = 0;
+    loadItems(currentMuniId, currentYear, currentType, 0, lastSearch);
+  }
+  function clearSearch() {
+    document.getElementById('search-input').value = '';
+    lastSearch  = '';
+    currentPage = 0;
+    loadItems(currentMuniId, currentYear, currentType, 0, '');
+  }
+  document.getElementById('search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchItems();
+  });
+
+  // ── Pagination ───────────────────────────────────────────────────────────
+  function updatePagination(count) {
+    const pg     = document.getElementById('pagination');
+    const hasMore = count === PAGE_SIZE;
+    pg.style.display = (currentPage > 0 || hasMore) ? 'flex' : 'none';
+    document.getElementById('btn-prev').disabled = currentPage === 0;
+    document.getElementById('btn-next').disabled = !hasMore;
+    document.getElementById('page-info').textContent = `Page ${currentPage + 1}`;
+  }
+  function changePage(delta) {
+    currentPage = Math.max(0, currentPage + delta);
+    loadItems(currentMuniId, currentYear, currentType, currentPage, lastSearch);
+    document.querySelector('.table-scroll').scrollTop = 0;
+  }
+
+  // ── Utilities ────────────────────────────────────────────────────────────
+  function fmtEur(n) {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency', currency: 'EUR',
+      minimumFractionDigits: 0, maximumFractionDigits: 0,
+    }).format(n);
+  }
+  function fmtShort(n) {
+    if (n >= 1_000_000) return '€' + (n/1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000)     return '€' + (n/1_000).toFixed(0) + 'K';
+    return '€' + n;
+  }
+  function truncate(s, max) {
+    return s && s.length > max ? s.slice(0, max) + '…' : (s || '—');
+  }
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  init();
+</script>
+</body>
+</html>
