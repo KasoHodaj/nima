@@ -4,9 +4,13 @@ A Python tool for extracting and visualising budget data from Greek municipal PD
 Stack
 
 Extraction — pdfplumber
+
 Storage — SQLite + SQLModel
+
 Search — FTS5 full-text index
+
 API — FastAPI
+
 Dashboard — HTML + Chart.js
 
 Quickstart
