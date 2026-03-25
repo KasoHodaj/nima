@@ -1,7 +1,6 @@
 Nima
 
-A Python tool for extracting and visualising budget data from Greek municipal PDFs.
-Stack
+A Python tool for extracting and visualising budget data from Greek open datasets (from PDF).
 
 Extraction — pdfplumber
 
@@ -24,6 +23,4 @@ python -m nima serve
 
 Open dashboard/index.html in your browser.
 
-Related
 
-OpenCouncil Diavgeia
